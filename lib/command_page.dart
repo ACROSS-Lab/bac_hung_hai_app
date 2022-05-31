@@ -33,7 +33,7 @@ class CommandPage extends StatefulWidget {
 class _CommandPageState extends State<CommandPage> {
 
   _CommandPageState({required this.total, required this.socket}) : super() {
-    socket.listen(listenSocket);
+    //socket.listen(listenSocket);
   }
 
   void listenSocket(List<int> event) {
@@ -80,7 +80,7 @@ class _CommandPageState extends State<CommandPage> {
   bool drainDredge      = false;
   int rest              =  0;
   Socket socket         ;
-  charts.Series<LinearData, int>? water_pollution;
+  List<charts.Series<LinearData, int>> water_pollution = [];
   List<charts.Series<LinearData, int>> solid_pollution = [];
 
 
@@ -115,13 +115,13 @@ class _CommandPageState extends State<CommandPage> {
     var actionGroups = groupBy(widget.init_data['actions'], (dynamic action) => action['name']);
     var background_colors = [Colors.grey[300], Colors.white];
     var i = 0;
-    for(var groups in actionGroups.entries) {
+    for(var group in actionGroups.entries) {
 
       // For groups containing more than one item, we create a radio button
-      if (groups.value.length > 1){
-        print(groups.value);
+      if (group.value.length > 1){
+        print(group.value);
         var choices = <Widget>[];
-        for (var action in groups.value){
+        for (var action in group.value){
           choices.add(
             Column(
               children: [
@@ -133,7 +133,10 @@ class _CommandPageState extends State<CommandPage> {
         }
 
         choices.add(const Spacer());
-        choices.add(Image.asset('assets/waste-collection.png'));
+        choices.add(
+            Image.asset('assets/${group.value.first['asset_name']}', height: 100, width: 100,
+                        errorBuilder: (_context, obj, stack) => Image.asset('assets/waste-collection.png', height: 100, width: 100),)
+        );
 
         actions.add(
             Container(
@@ -145,7 +148,7 @@ class _CommandPageState extends State<CommandPage> {
                     children: [
                       Padding(padding: EdgeInsets.all(3),
                         child: Text(
-                          '${groups.value.first['name']}',
+                          '${group.value.first['name']}',
                           textAlign: TextAlign.center,
                           style: Theme.of(context).textTheme.headline4,
                         ),
@@ -161,7 +164,7 @@ class _CommandPageState extends State<CommandPage> {
         );
       }
       else {
-        var action = groups.value.first;
+        var action = group.value.first;
         actions.add(
             Container(
               color: background_colors[i%2],
@@ -183,7 +186,9 @@ class _CommandPageState extends State<CommandPage> {
                           Checkbox(value: false, onChanged: checkboxChanged),
                           Text('${action['cost']}\$'),
                           const Spacer(),
-                          Image.asset('assets/waste-collection.png'),
+                          Image.asset('assets/${action['asset_name']}', height: 100, width: 100,
+                                      errorBuilder: (_context, obj, stack) => Image.asset('assets/waste-collection.png', height: 100, width: 100),)
+                          //Image.asset('assets/drain-dredge.png', height: 100, width: 100,),
                         ],
                       ),
                     ]
