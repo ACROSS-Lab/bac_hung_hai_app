@@ -3,7 +3,6 @@
 import 'dart:convert';
 import 'dart:async';
 import 'dart:io';
-import 'package:bac_hung_hai_app/socket_listener.dart';
 import "package:collection/collection.dart";
 import 'package:flutter/material.dart';
 import 'package:charts_flutter/flutter.dart' as charts;
@@ -11,12 +10,12 @@ import 'package:flutter/material.dart';
 
 class CommandPage extends StatefulWidget {
 
-  final SocketListener  socketListener;
+  final Socket  socket;
   final String  player_name;
   final int     init_budget;
   final dynamic init_data;
 
-  CommandPage({Key? key, required this.socketListener, required this.init_data}) :
+  CommandPage({Key? key, required this.socket, required this.init_data}) :
       player_name = init_data['player_name'],
       init_budget = init_data['budget'],
       super(key: key)
@@ -25,7 +24,7 @@ class CommandPage extends StatefulWidget {
 
   @override
   State<StatefulWidget> createState() {
-    return _CommandPageState(total: init_budget, socketListener: socketListener);
+    return _CommandPageState(total: init_budget, socket: socket);
   }
   
 }
@@ -33,45 +32,55 @@ class CommandPage extends StatefulWidget {
 
 class _CommandPageState extends State<CommandPage> {
 
-  _CommandPageState({required this.total, required this.socketListener}) : super() {
-    socketListener.waterPollutionFc = read_water_pollution;
-    socketListener.solidPollutionFc = read_solid_pollution;
-
+  _CommandPageState({required this.total, required this.socket}) : super() {
+    socket.listen(listenSocket);
   }
 
-  void read_water_pollution(String line, SocketListener socketListener) {
-    var data = jsonDecode(line.replaceAll("_WATER_:", ''));
-    setState(() {
-      water_pollution = data;
-    });
-  }
+  void listenSocket(List<int> event) {
+    var mess = utf8.decode(event);
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text(mess),),
+    );
+    print(mess);
+    for(var line in mess.split("\n").where((element) => element.trim() != '')){
 
+      if (line.startsWith("_WATER_")) {
+        var data = jsonDecode(line.replaceAll("_WATER_:", ''));
+        print(data);
+        setState((){
+          water_pollution = data;
+        });
 
-  void read_solid_pollution(String line, SocketListener socketListener) {
-    var data = jsonDecode(line.replaceAll("_SOLID_:", ''));
-    setState(() {var tmp = <LinearData>[];
-      var i = 0;
-      for (var datum in data) {
-        tmp.add(LinearData(i, datum));
-        i++;
       }
-      solid_pollution = [charts.Series<LinearData, int>(
-        id: 'Solid',
-        colorFn: (_, __) => charts.MaterialPalette.blue.shadeDefault,
-        domainFn: (LinearData datum, _) => datum.i,
-        measureFn: (LinearData datum, _) => datum.v,
-        data: tmp,
-      )];
-    });
-  }
+      else if (line.startsWith("_SOLID_")){
+        var data = jsonDecode(line.replaceAll("_SOLID_:", ''));
+        print(data);
+        setState(() {
+          var tmp = <LinearData>[];
+          var i = 0;
+          for (var datum in data) {
+            tmp.add(LinearData(i, datum));
+            i++;
+          }
+          solid_pollution = [charts.Series<LinearData, int>(
+            id: 'Sales',
+            colorFn: (_, __) => charts.MaterialPalette.blue.shadeDefault,
+            domainFn: (LinearData datum, _) => datum.i,
+            measureFn: (LinearData datum, _) => datum.v,
+            data: tmp,
+          )];
+        });
+      }
 
+    }
+  }
 
   int total             = 0;
   bool wasteCollection  = false;
   bool drainDredge      = false;
   int rest              =  0;
-  SocketListener socketListener;
-  List<charts.Series<LinearData, int>> water_pollution = [];
+  Socket socket         ;
+  charts.Series<LinearData, int>? water_pollution;
   List<charts.Series<LinearData, int>> solid_pollution = [];
 
 

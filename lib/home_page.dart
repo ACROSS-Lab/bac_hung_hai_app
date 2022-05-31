@@ -1,7 +1,4 @@
 
-import 'dart:ffi';
-
-import 'package:bac_hung_hai_app/socket_listener.dart';
 import 'package:flutter/material.dart';
 
 import 'dart:io';
@@ -24,6 +21,7 @@ class MyHomePage extends StatefulWidget {
 
 class _MyHomePageState extends State<MyHomePage> {
 
+  Socket? socket      = null;
   var ipController    = TextEditingController(text:'192.168.0.195');
   var portController  = TextEditingController(text:'8989');
 
@@ -39,11 +37,10 @@ class _MyHomePageState extends State<MyHomePage> {
       */
 
       print('trying to join the game');
-
-      var socket = await Socket.connect(ipController.text, int.parse(portController.text));
-      print(socket);
-      var socketListener = SocketListener(socket: socket);
-      socketListener.initialDataFc = push_command_page;
+      if (socket != null){
+        socket?.close();
+      }
+      socket = await Socket.connect(ipController.text, int.parse(portController.text));
 
       print("connected");
       ScaffoldMessenger.of(context).showSnackBar(
@@ -52,6 +49,7 @@ class _MyHomePageState extends State<MyHomePage> {
         ),
       );
 
+      await push_command_page();
 
 
 
@@ -68,14 +66,34 @@ class _MyHomePageState extends State<MyHomePage> {
 
   }
 
-  void push_command_page(String line, SocketListener socketListener){
-    print(line);
-    var data = jsonDecode(line.replaceAll("_INIT_DATA_:", ''));
-    print("player_name:" + data['player_name']);
-    Navigator.push(
-      context,
-      MaterialPageRoute(builder: (context) => CommandPage(socketListener: socketListener,init_data: data)),
-    );
+  Future<void> push_command_page() async {
+    // listen to the received data event stream
+    socket?.listen((List<int> event) {
+
+      var mess = utf8.decode(event);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(mess),),
+      );
+      print(mess);
+      for(var line in mess.split("\n").where((element) => element.trim() != '')){
+
+        if (line.startsWith("_INIT_DATA_")) {
+          var data = jsonDecode(line.replaceAll("_INIT_DATA_:", ''));
+          print("player_name:" + data['player_name']);
+          Navigator.push(
+            context,
+            MaterialPageRoute(builder: (context) => CommandPage(socket: socket!,init_data: data)),
+          );
+
+
+        }
+
+      }
+
+      print(mess);
+
+    });
+
     // channel.stream.listen((message) {
     //   print(message);
     // });
@@ -83,7 +101,8 @@ class _MyHomePageState extends State<MyHomePage> {
     // channel.sink.add('_AFC_:192.168.98.110\n');
 
     // send hello
-    socketListener.send_line("_AFC_:coucou");
+    socket?.add(utf8.encode('_AFC_:${socket?.address.address}\n'));
+    await socket?.flush();
 
   }
 
