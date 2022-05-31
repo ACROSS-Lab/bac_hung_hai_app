@@ -3,6 +3,7 @@
 import 'dart:convert';
 import 'dart:async';
 import 'dart:io';
+import 'dart:typed_data';
 import "package:collection/collection.dart";
 import 'package:flutter/material.dart';
 import 'package:charts_flutter/flutter.dart' as charts;
@@ -14,8 +15,9 @@ class CommandPage extends StatefulWidget {
   final String  player_name;
   final int     init_budget;
   final dynamic init_data;
+  final StreamSubscription<Uint8List> subscription;
 
-  CommandPage({Key? key, required this.socket, required this.init_data}) :
+  CommandPage({Key? key, required this.socket, required this.init_data, required this.subscription}) :
       player_name = init_data['player_name'],
       init_budget = init_data['budget'],
       super(key: key)
@@ -24,7 +26,7 @@ class CommandPage extends StatefulWidget {
 
   @override
   State<StatefulWidget> createState() {
-    return _CommandPageState(total: init_budget, socket: socket);
+    return _CommandPageState(total: init_budget, socket: socket, subscription: subscription);
   }
   
 }
@@ -32,43 +34,64 @@ class CommandPage extends StatefulWidget {
 
 class _CommandPageState extends State<CommandPage> {
 
-  _CommandPageState({required this.total, required this.socket}) : super() {
-    //socket.listen(listenSocket);
+
+
+  final StreamSubscription<Uint8List> subscription;
+
+  _CommandPageState({required this.total, required this.socket, required this.subscription}) : super() {
+      //socket.listen(listenSocket);
+    subscription.onData(listenSocket);
   }
 
-  void listenSocket(List<int> event) {
-    var mess = utf8.decode(event);
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(mess),),
-    );
-    print(mess);
-    for(var line in mess.split("\n").where((element) => element.trim() != '')){
+  void listenSocket(dynamic event) {
 
+
+    var mess = utf8.decode(event);
+    // ScaffoldMessenger.of(context).showSnackBar(
+    //   SnackBar(content: Text(mess),),
+    // );
+    print(mess);
+    for(var line in mess.split("\n").where((element) => element.trim().replaceAll('\r', '') != '')){
+      line = line.trim().replaceAll('\r', '');
       if (line.startsWith("_WATER_")) {
-        var data = jsonDecode(line.replaceAll("_WATER_:", ''));
+        List<num> data = jsonDecode(line.replaceAll("_WATER_:", '')).cast<num>();
         print(data);
+
         setState((){
-          water_pollution = data;
+          water_pollution = charts.Series(
+              id: 'water pollution',
+              colorFn: (_, __) => charts.MaterialPalette.deepOrange.shadeDefault,
+              data: data.mapIndexed((i, v) => LinearData(i, v)).toList(),
+              domainFn: (ld,_) => ld.i,
+              measureFn: (ld, _) => ld.v
+            );
         });
 
       }
       else if (line.startsWith("_SOLID_")){
-        var data = jsonDecode(line.replaceAll("_SOLID_:", ''));
+        List data = jsonDecode(line.replaceAll("_SOLID_:", '')).cast<num>();
         print(data);
         setState(() {
-          var tmp = <LinearData>[];
-          var i = 0;
-          for (var datum in data) {
-            tmp.add(LinearData(i, datum));
-            i++;
-          }
-          solid_pollution = [charts.Series<LinearData, int>(
-            id: 'Sales',
-            colorFn: (_, __) => charts.MaterialPalette.blue.shadeDefault,
+          solid_pollution = charts.Series<LinearData, int>(
+            id: 'Solid pollution',
+            colorFn: (_, __) => charts.MaterialPalette.teal.shadeDefault,
             domainFn: (LinearData datum, _) => datum.i,
             measureFn: (LinearData datum, _) => datum.v,
-            data: tmp,
-          )];
+            data: data.mapIndexed((i, v) => LinearData(i, v)).toList(),
+          );
+        });
+      }
+      else if (line.startsWith("_PRODUCTIVITY_")) {
+        List<num> data = jsonDecode(line.replaceAll("_PRODUCTIVITY_:", '')).cast<num>();
+        print(data);
+        setState(() {
+          productivity = charts.Series<LinearData, int>(
+              id: 'Productivity',
+              colorFn: (_, __) => charts.MaterialPalette.blue.shadeDefault,
+              domainFn: (LinearData datum, _) => datum.i,
+              measureFn: (LinearData datum, _) => datum.v,
+              data: data.mapIndexed((i, v) => LinearData(i, v)).toList(),
+          );
         });
       }
 
@@ -79,9 +102,26 @@ class _CommandPageState extends State<CommandPage> {
   bool wasteCollection  = false;
   bool drainDredge      = false;
   int rest              =  0;
-  Socket socket         ;
-  List<charts.Series<LinearData, int>> water_pollution = [];
-  List<charts.Series<LinearData, int>> solid_pollution = [];
+  Socket socket;
+  charts.Series<LinearData, int> water_pollution = charts.Series(
+      id: "Water pollution",
+      data: [],
+      domainFn: (ld,_) => ld.i,
+      measureFn: (ld, _) => ld.v
+  );
+  charts.Series<LinearData, int> solid_pollution = charts.Series(
+      id: "Solid pollution",
+      data: [],
+      domainFn: (ld,_) => ld.i,
+      measureFn: (ld, _) => ld.v
+  );
+
+  charts.Series<LinearData, int> productivity = charts.Series(
+      id: "Productivity",
+      data: [],
+      domainFn: (ld,_) => ld.i,
+      measureFn: (ld, _) => ld.v
+  );
 
 
   void radioChanged(dynamic value) {
@@ -220,45 +260,50 @@ class _CommandPageState extends State<CommandPage> {
                   Expanded(
                     child: TabBarView(
                       children:[
-                        Column(
-                          children: [
-                            ListView(
-                              shrinkWrap: true,
-                              padding: const EdgeInsets.all(8),
-                              children: actions,
-                            ),
-                            Padding(
-                              padding: const EdgeInsets.all(5),
-                              child: Row(
-                                children: [
-                                  Text(
-                                    'Reste:',
-                                    style: Theme.of(context).textTheme.headline4,
-                                  ),
-                                  const Spacer(),
-                                  Text(
-                                    '${rest}\$',
-                                    style: Theme.of(context).textTheme.headline4,
-                                  )
-                                ],
-                              ),
-                            ),
-                            Center(child: ElevatedButton(child: const Text('Valider le tour'), onPressed: validate,))
-                          ],
+                        Padding(
+                          padding: const EdgeInsets.all(3.0),
+                          child: ListView(
+                            shrinkWrap: true,
+                            padding: const EdgeInsets.all(8),
+                            children: actions,
+                          ),
                         ),
                         Expanded(
                             child:
                             Padding(
-                              padding: const EdgeInsets.all(8.0),
+                              padding:
+                              const EdgeInsets.all(8.0),
                               child: charts.LineChart(
-                                solid_pollution,
+                                [
+                                  solid_pollution,
+                                  water_pollution,
+                                  productivity,
+                                ],
                                 animate: true,
                               ),
                             )
+                        ),
+
+                      ],
+                    ),
+                  ),
+                  Padding(
+                    padding: const EdgeInsets.all(5),
+                    child: Row(
+                      children: [
+                        Text(
+                          'Reste:',
+                          style: Theme.of(context).textTheme.headline4,
+                        ),
+                        const Spacer(),
+                        Text(
+                          '${rest}\$',
+                          style: Theme.of(context).textTheme.headline4,
                         )
                       ],
                     ),
                   ),
+                  Center(child: ElevatedButton(child: const Text('Valider le tour'), onPressed: validate,))
                 ],
               ),
             ),
@@ -275,7 +320,7 @@ class _CommandPageState extends State<CommandPage> {
 class LinearData {
 
   int i;
-  double v;
+  num v;
 
   LinearData(this.i, this.v);
 
