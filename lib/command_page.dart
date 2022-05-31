@@ -135,7 +135,7 @@ class _CommandPageState extends State<CommandPage> {
         choices.add(const Spacer());
         choices.add(
             Image.asset('assets/${group.value.first['asset_name']}', height: 100, width: 100,
-                        errorBuilder: (_context, obj, stack) => Image.asset('assets/waste-collection.png', height: 100, width: 100),)
+                        errorBuilder: (context, obj, stack) => Image.asset('assets/waste-collection.png', height: 100, width: 100),)
         );
 
         actions.add(
@@ -220,42 +220,45 @@ class _CommandPageState extends State<CommandPage> {
                   Expanded(
                     child: TabBarView(
                       children:[
-                        ListView(
-                          shrinkWrap: true,
-                          padding: const EdgeInsets.all(8),
-                          children: actions,
-                        ),
-                        ListView(
-                          shrinkWrap: true,
-                          padding: const EdgeInsets.all(8),
+                        Column(
                           children: [
-                          charts.LineChart(
-                            solid_pollution,
-                            animate: true,
-                          )
+                            ListView(
+                              shrinkWrap: true,
+                              padding: const EdgeInsets.all(8),
+                              children: actions,
+                            ),
+                            Padding(
+                              padding: const EdgeInsets.all(5),
+                              child: Row(
+                                children: [
+                                  Text(
+                                    'Reste:',
+                                    style: Theme.of(context).textTheme.headline4,
+                                  ),
+                                  const Spacer(),
+                                  Text(
+                                    '${rest}\$',
+                                    style: Theme.of(context).textTheme.headline4,
+                                  )
+                                ],
+                              ),
+                            ),
+                            Center(child: ElevatedButton(child: const Text('Valider le tour'), onPressed: validate,))
                           ],
-
-                        )
-                      ],
-                    ),
-                  ),
-                  Padding(
-                    padding: const EdgeInsets.all(5),
-                    child: Row(
-                      children: [
-                        Text(
-                          'Reste:',
-                          style: Theme.of(context).textTheme.headline4,
                         ),
-                        const Spacer(),
-                        Text(
-                            '${rest}\$',
-                            style: Theme.of(context).textTheme.headline4,
+                        Expanded(
+                            child:
+                            Padding(
+                              padding: const EdgeInsets.all(8.0),
+                              child: charts.LineChart(
+                                solid_pollution,
+                                animate: true,
+                              ),
+                            )
                         )
                       ],
                     ),
                   ),
-                  Center(child: ElevatedButton(child:const Text('Valider le tour'), onPressed: validate,))
                 ],
               ),
             ),
