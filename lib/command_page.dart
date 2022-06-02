@@ -4,6 +4,7 @@ import 'dart:convert';
 import 'dart:async';
 import 'dart:io';
 import 'dart:typed_data';
+import 'package:bac_hung_hai_app/GameAction.dart';
 import "package:collection/collection.dart";
 import 'package:flutter/material.dart';
 import 'package:charts_flutter/flutter.dart' as charts;
@@ -103,6 +104,8 @@ class _CommandPageState extends State<CommandPage> {
   bool drainDredge      = false;
   int rest              =  0;
   Socket socket;
+  Map<String, bool> selected_actions = {};
+
   charts.Series<LinearData, int> water_pollution = charts.Series(
       id: "Water pollution",
       data: [],
@@ -134,6 +137,7 @@ class _CommandPageState extends State<CommandPage> {
     }
   }
 
+  // List<int> choicesValues = [];
   void checkboxChanged(bool? value) {
     print('coucou');
     if (value != null) {
@@ -147,36 +151,119 @@ class _CommandPageState extends State<CommandPage> {
 
   }
 
-
+  //TODO: refactor in a map of pair, or null string for false
+  Map<String, bool> activated_switches  = {};
+  Map<String, String> group_choices     = {};
+  bool alone = false;
   @override
   Widget build(BuildContext context) {
     var actions = <Widget>[];
+    // choicesValues = [];
+    List<GameAction> game_actions = widget.init_data['actions'].map<GameAction>(
+            (action) => GameAction(
+                          id: action['id'],
+                          name: action['name'],
+                          cost: num.parse(action['cost']),
+                          once_per_game: action['once_per_game'] == 'true',
+                          mandatory: action['mandatory'] == 'true',
+                          asset_name: action['asset_name'])).toList();
 
-    var actionGroups = groupBy(widget.init_data['actions'], (dynamic action) => action['name']);
+    //Initializes all actions as not selected
+    game_actions.forEach((element) {
+      if (! selected_actions.containsKey(element.id)) {
+        selected_actions[element.id] = false;
+      }
+    });
+
+    var actionGroups = groupBy(game_actions, (GameAction action) => action.name);
     var background_colors = [Colors.grey[300], Colors.white];
     var i = 0;
-    for(var group in actionGroups.entries) {
-
-      // For groups containing more than one item, we create a radio button
+    for (var group in actionGroups.entries) {
+      var first = group.value.first;
       if (group.value.length > 1){
-        print(group.value);
-        var choices = <Widget>[];
-        for (var action in group.value){
+
+        List<Widget> choices = [];
+        if (! group_choices.containsKey(first.id)) {
+          group_choices[first.id] = first.id;
+        }
+        if (! first.mandatory) {
+          if (! activated_switches.containsKey(first.id)) {
+            activated_switches[first.id] = false;
+          }
           choices.add(
-            Column(
-              children: [
-                Radio(value: false, groupValue: action['name'], onChanged: radioChanged),
-                Text('${action['cost']}\$'),
-              ],
-            )
+            Switch(value: activated_switches[first.id]!, onChanged: (value){
+              setState((){
+                activated_switches[first.id] = value;
+              });
+
+            })
           );
         }
+        choices.addAll(
+          group.value.mapIndexed<Widget>((index, action) =>
+            Expanded(
+              child:
+              Column(
+                children: [
+                  Radio<String>(
+                    value: action.id,
+                    groupValue: group_choices[first.id],
+                    onChanged:
+                    activated_switches[first.id]!
+                        ? (value){
+                          setState(() {
+                            group_choices[first.id] = value!;
+                          });
+                      }
+                    : null
+                  ),
+                  Text('${action.cost}\$'),
+                ],
+              ),
+            )
+          ).toList()
+        );
 
         choices.add(const Spacer());
         choices.add(
-            Image.asset('assets/${group.value.first['asset_name']}', height: 100, width: 100,
-                        errorBuilder: (context, obj, stack) => Image.asset('assets/waste-collection.png', height: 100, width: 100),)
+          Image.asset('assets/${first.asset_name}', height: 100, width: 100,
+          errorBuilder: (context, obj, stack) => Image.asset('assets/waste-collection.png', height: 100, width: 100),)
         );
+      // choicesValues.add(0);
+      // var choices = <Widget>[];
+      //
+      //
+      // // For groups containing more than one item, we create a radio button
+      // if (group.value.length > 1){
+      //   var switchEnabled = true;
+      //   int j = 0;
+      //   if (first['mandatory'] == 'true') {
+      //     choices.add(
+      //       Switch(value: switchEnabled, onChanged: checkboxChanged)
+      //     );
+      //   }
+      //   for (var action in group.value){
+      //     choices.add(
+      //       Column(
+      //         children: [
+      //           Radio(
+      //               value: j,
+      //               groupValue: choicesValues[i],
+      //               onChanged: switchEnabled ? (int? value) {
+      //                 setState(() {
+      //                   print(choicesValues);
+      //                   choicesValues[i] = value!;
+      //                 });
+      //               } : null,
+      //           ),
+      //           Text('${action['cost']}\$'),
+      //         ],
+      //       )
+      //     );
+      //     j++;
+      //   }
+
+
 
         actions.add(
             Container(
@@ -188,13 +275,15 @@ class _CommandPageState extends State<CommandPage> {
                     children: [
                       Padding(padding: EdgeInsets.all(3),
                         child: Text(
-                          '${group.value.first['name']}',
+                          '${first.name}',
                           textAlign: TextAlign.center,
                           style: Theme.of(context).textTheme.headline4,
                         ),
                       ),
                       Row(
-                        children: choices
+                        children:
+                          choices
+
                         ,
                       ),
                     ]
@@ -204,6 +293,9 @@ class _CommandPageState extends State<CommandPage> {
         );
       }
       else {
+        if (! activated_switches.containsKey(first.id)) {
+          activated_switches[first.id] = false;
+        }
         var action = group.value.first;
         actions.add(
             Container(
@@ -216,17 +308,23 @@ class _CommandPageState extends State<CommandPage> {
                       Padding(
                         padding: const EdgeInsets.all(3),
                         child: Text(
-                          '${action['name']}',
+                          '${action.name}',
                           textAlign: TextAlign.center,
                           style: Theme.of(context).textTheme.headline4,
                         ),
                       ),
                       Row(
                         children: [
-                          Checkbox(value: false, onChanged: checkboxChanged),
-                          Text('${action['cost']}\$'),
+                          Switch(
+                              value: activated_switches[action.id]!,
+                              onChanged: (value){
+                                setState((){
+                                    activated_switches[first.id] = value;
+                                });
+                              }),
+                          Text('${action.cost}\$'),
                           const Spacer(),
-                          Image.asset('assets/${action['asset_name']}', height: 100, width: 100,
+                          Image.asset('assets/${action.asset_name}', height: 100, width: 100,
                                       errorBuilder: (_context, obj, stack) => Image.asset('assets/waste-collection.png', height: 100, width: 100),)
                           //Image.asset('assets/drain-dredge.png', height: 100, width: 100,),
                         ],
@@ -303,7 +401,7 @@ class _CommandPageState extends State<CommandPage> {
                       ],
                     ),
                   ),
-                  Center(child: ElevatedButton(child: const Text('Valider le tour'), onPressed: validate,))
+                  Center(child: ElevatedButton(onPressed: validate,child: const Text('Valider le tour'),))
                 ],
               ),
             ),
