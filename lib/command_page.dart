@@ -27,7 +27,7 @@ class CommandPage extends StatefulWidget {
 
   @override
   State<StatefulWidget> createState() {
-    return _CommandPageState(total: init_budget, socket: socket, subscription: subscription);
+    return _CommandPageState(init_data: init_data, socket: socket, subscription: subscription);
   }
   
 }
@@ -38,10 +38,31 @@ class _CommandPageState extends State<CommandPage> {
 
 
   final StreamSubscription<Uint8List> subscription;
+  final dynamic init_data;
 
-  _CommandPageState({required this.total, required this.socket, required this.subscription}) : super() {
-      //socket.listen(listenSocket);
+
+
+  _CommandPageState({required this.init_data, required this.socket, required this.subscription}) : super() {
+    init();
+  }
+
+  void init() async {
+
+    total = init_data['budget'];
+
+    //Add a listener function to the socket to process received data
     subscription.onData(listenSocket);
+
+    //Process initial data to create the list of possible actions
+    gameActions = { for (var action in init_data['actions'].map<GameAction>(
+                (action) => GameAction(
+                id: action['id'],
+                name: action['name'],
+                cost: num.parse(action['cost']),
+                once_per_game: action['once_per_game'] == 'true',
+                mandatory: action['mandatory'] == 'true',
+                asset_name: action['asset_name'])
+        ).toList()) action.id : action };
   }
 
   void listenSocket(dynamic event) {
@@ -104,7 +125,8 @@ class _CommandPageState extends State<CommandPage> {
   bool drainDredge      = false;
   int rest              =  0;
   Socket socket;
-  Map<String, bool> selected_actions = {};
+  Map<String, bool> selectedActions   = {};
+  Map<String, GameAction> gameActions = {};
 
   charts.Series<LinearData, int> water_pollution = charts.Series(
       id: "Water pollution",
@@ -126,56 +148,40 @@ class _CommandPageState extends State<CommandPage> {
       measureFn: (ld, _) => ld.v
   );
 
-
-  void radioChanged(dynamic value) {
-    print(value);
-    if (value != null) {
-      setState() {
-        rest += 40 * (value ? -1 : 1);
-        wasteCollection = value;
-      }
-    }
-  }
-
-  // List<int> choicesValues = [];
-  void checkboxChanged(bool? value) {
-    print('coucou');
-    if (value != null) {
-      setState() {
-        rest += 50 * (value ? -1 : 1);
-        drainDredge = value;
-      }
-    }
-  }
   void validate() {
+    var takenActions = <String>[];
+    for(var choice in  activated_switches.keys) {
+      if (activated_switches[choice]!){
+        if (group_choices.containsKey(choice)){
+          takenActions.add(group_choices[choice]!);
+        }
+        else{
+          takenActions.add(choice);
+        }
 
+      }
+
+    }
+    print(takenActions);
+    socket.add(utf8.encode('_AFEOT_:$takenActions\n'));
   }
 
   //TODO: refactor in a map of pair, or null string for false
-  Map<String, bool> activated_switches  = {};
-  Map<String, String> group_choices     = {};
+  Map<String, bool>   activated_switches  = {};
+  Map<String, String> group_choices       = {};
   bool alone = false;
   @override
   Widget build(BuildContext context) {
     var actions = <Widget>[];
-    // choicesValues = [];
-    List<GameAction> game_actions = widget.init_data['actions'].map<GameAction>(
-            (action) => GameAction(
-                          id: action['id'],
-                          name: action['name'],
-                          cost: num.parse(action['cost']),
-                          once_per_game: action['once_per_game'] == 'true',
-                          mandatory: action['mandatory'] == 'true',
-                          asset_name: action['asset_name'])).toList();
 
     //Initializes all actions as not selected
-    game_actions.forEach((element) {
-      if (! selected_actions.containsKey(element.id)) {
-        selected_actions[element.id] = false;
+    gameActions.keys.forEach((element) {
+      if (! selectedActions.containsKey(element)) {
+        selectedActions[element] = false;
       }
     });
 
-    var actionGroups = groupBy(game_actions, (GameAction action) => action.name);
+    var actionGroups = groupBy(gameActions.values, (GameAction action) => action.name);
     var background_colors = [Colors.grey[300], Colors.white];
     var i = 0;
     for (var group in actionGroups.entries) {
@@ -199,6 +205,9 @@ class _CommandPageState extends State<CommandPage> {
             })
           );
         }
+        else {
+            activated_switches[first.id] = true;
+        }
         choices.addAll(
           group.value.mapIndexed<Widget>((index, action) =>
             Expanded(
@@ -207,9 +216,9 @@ class _CommandPageState extends State<CommandPage> {
                 children: [
                   Radio<String>(
                     value: action.id,
-                    groupValue: group_choices[first.id],
+                    groupValue: group_choices[first.id]!,
                     onChanged:
-                    activated_switches[first.id]!
+                    activated_switches[first.id]??false
                         ? (value){
                           setState(() {
                             group_choices[first.id] = value!;

@@ -25,7 +25,7 @@ class MyHomePage extends StatefulWidget {
 class _MyHomePageState extends State<MyHomePage> {
 
   Socket? socket = null;
-  var ipController    = TextEditingController(text:'192.168.0.195');
+  var ipController    = TextEditingController(text:'192.168.17.97');
   var portController  = TextEditingController(text:'8989');
 
   Future<void> _try_join() async {
