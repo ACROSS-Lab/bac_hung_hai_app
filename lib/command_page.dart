@@ -358,6 +358,7 @@ class _CommandPageState extends State<CommandPage> {
                 ),
               ),
               body: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
                   Expanded(
                     child: TabBarView(
@@ -411,44 +412,53 @@ class _CommandPageState extends State<CommandPage> {
                       ],
                     ),
                   ),
-                  Padding(
-                    padding: const EdgeInsets.all(5),
-                    child: Row(
+                  Container(
+                    color: Colors.lime[50],
+                    child: Column(
                       children: [
-                        Text(
-                          'Reste:',
-                          style: Theme.of(context).textTheme.headline4?.apply(
-                            color:  getRest() < 0
-                                  ? negativeRestColor
-                                  : positiveRestColor
+                        Padding(
+
+                          padding: const EdgeInsets.all(5),
+                          child: Row(
+                            children: [
+                              Text(
+                                'Reste:',
+                                style: Theme.of(context).textTheme.headline4?.apply(
+                                    color:  getRest() < 0
+                                        ? negativeRestColor
+                                        : positiveRestColor
+                                ),
+                              ),
+                              const Spacer(),
+                              Text(
+                                  '${getRest()}\$',
+                                  style: Theme.of(context).textTheme.headline4?.apply(
+                                      color:  getRest() < 0
+                                          ? negativeRestColor
+                                          : positiveRestColor
+                                  )
+                              )
+                            ],
                           ),
                         ),
-                        const Spacer(),
-                        Text(
-                          '${getRest()}\$',
-                            style: Theme.of(context).textTheme.headline4?.apply(
-                                color:  getRest() < 0
-                                    ? negativeRestColor
-                                    : positiveRestColor
-                            )
-                        )
-                      ],
-                    ),
-                  ),
-                  Center(
-                      child: Padding(
-                        padding: const EdgeInsets.all(8.0),
-                        child: ElevatedButton(
+                        Center(
+                            child: Padding(
+                              padding: const EdgeInsets.all(8.0),
+                              child: ElevatedButton(
                                 onPressed:  getRest() >= 0
-                                          ? validate
-                                          : null,
+                                    ? validate
+                                    : null,
                                 child: Padding(
                                   padding: const EdgeInsets.all(8.0),
                                   child: Text('Valider le tour', style: Theme.of(context).textTheme.headline5),
                                 ),
-                        ),
-                      )
+                              ),
+                            )
+                        )
+                      ],
+                    ),
                   )
+
                 ],
               ),
             ),
