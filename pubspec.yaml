@@ -64,6 +64,13 @@ flutter:
   assets:
     - assets/waste-collection.png
     - assets/drain-dredge.png
+    - assets/build-collection-pits.png
+    - assets/fallow.png
+    - assets/purchase-fertilizers.png
+    - assets/raise-awareness.png
+    - assets/reduce-pesticide-use.png
+    - assets/trimestriel-waste-collection.png
+    - assets/wastewater-treatment.png
   # An image asset can refer to one or more resolution-specific "variants", see
   # https://flutter.dev/assets-and-images/#resolution-aware
 
