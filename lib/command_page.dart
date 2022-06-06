@@ -14,13 +14,13 @@ class CommandPage extends StatefulWidget {
 
   final Socket  socket;
   final String  player_name;
-  final int     init_budget;
+ // final int     init_budget;
   final dynamic init_data;
   final StreamSubscription<Uint8List> subscription;
 
   CommandPage({Key? key, required this.socket, required this.init_data, required this.subscription}) :
       player_name = init_data['player_name'],
-      init_budget = init_data['budget'],
+   //   init_budget = init_data['budget'],
       super(key: key)
   ;
 
@@ -41,6 +41,9 @@ class _CommandPageState extends State<CommandPage> {
   final dynamic init_data;
   final Color? positiveRestColor = const Color.fromARGB(255, 18, 114, 18);
   final Color? negativeRestColor = const Color.fromARGB(255, 236, 9, 9);
+  dynamic turnData;
+  int turnNumber              = 0;
+  bool canPlay                = false;
 
 
   _CommandPageState({required this.init_data, required this.socket, required this.subscription}) : super() {
@@ -49,7 +52,10 @@ class _CommandPageState extends State<CommandPage> {
 
   void init() async {
 
-    total = 0;
+    total                   = 0;
+    canPlay                 = true;
+    turnBudget              = init_data['budget'];
+    turnNumber              = 1;
 
     //Add a listener function to the socket to process received data
     subscription.onData(listenSocket);
@@ -64,14 +70,13 @@ class _CommandPageState extends State<CommandPage> {
             mandatory: action['mandatory'] == 'true',
             asset_name: action['asset_name'],
             description:  action.containsKey('description')
-                ? action['description']
-                : ''
+                        ? action['description']
+                        : ''
         )
     ).toList()) action.id : action };
   }
 
   void listenSocket(dynamic event) {
-
 
     var mess = utf8.decode(event);
     print("received: " + mess);
@@ -117,10 +122,20 @@ class _CommandPageState extends State<CommandPage> {
           );
         });
       }
+      else if (line.startsWith("_START_TURN_")) {
+        var turnData = jsonDecode(line.replaceAll("_START_TURN_:", ''));
+        setState(() {
+          canPlay = true;
+          turnBudget = turnData['budget'];
+          turnNumber = turnData['turn'];
+        });
 
+
+      }
     }
   }
 
+  num turnBudget        = 0;
   num total             = 0;
   bool wasteCollection  = false;
   bool drainDredge      = false;
@@ -155,8 +170,8 @@ class _CommandPageState extends State<CommandPage> {
     for(var choice in  activated_switches.keys) {
       if (activated_switches[choice]!){
         String id =   group_choices.containsKey(choice)
-            ? group_choices[choice]!
-            : choice;
+                    ? group_choices[choice]!
+                    : choice;
         takenActions.add(id);
         setState(() {
           total += gameActions[id]!.cost;
@@ -168,14 +183,36 @@ class _CommandPageState extends State<CommandPage> {
   }
 
   //Sends the selected actions to the server (and thus ends the turn)
-  void validate() {
-    var takenActions = _processTotal();
-    socket.add(utf8.encode('_AFEOT_:$takenActions\n'));
+  void validate() async {
+    try {
+
+      canPlay = false;
+      var takenActions = _processTotal();
+      socket.add(utf8.encode('_AFEOT_:$takenActions\n'));
+      await socket.flush();
+      //Deleting the actions only available once per game
+      for(var id in takenActions) {
+        if (gameActions[id]!.once_per_game) {
+          gameActions.remove(id);
+          activated_switches.remove(id);
+          group_choices.remove(id);
+        }
+      }
+    }
+    catch(exception) {
+      canPlay =  true;
+      print("erreur pendant l'envoie");
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(exception.toString()),
+        ),
+      );
+    }
   }
 
   //Returns the difference between chosen actions costs and the budget
   num getRest(){
-    return init_data['budget'] - total;
+    return turnBudget - total;
   }
 
   //TODO: refactor those two maps in a map of pairs
@@ -317,7 +354,9 @@ class _CommandPageState extends State<CommandPage> {
                                 activated_switches[first.id] = value;
                                 _processTotal();
                               }),
-                          Text('${action.cost}\$',
+                          Text( action.cost > 0
+                              ? '${action.cost}\$'
+                              : '',
                               style: Theme.of(context).textTheme.headline6),
                           const Spacer(),
                           Image.asset('assets/${action.asset_name}', height: 100, width: 100,
@@ -342,6 +381,8 @@ class _CommandPageState extends State<CommandPage> {
       i++;
     }
 
+    _processTotal(); //To get the first total right
+
     return Scaffold(
 
       body:
@@ -349,7 +390,12 @@ class _CommandPageState extends State<CommandPage> {
             length: 2,
             child: Scaffold(
               appBar: AppBar(
-                title: Text('${widget.player_name}: ${init_data['budget']}\$'),
+                title: Text(
+                  '${widget.player_name} \t Tour $turnNumber \t $turnBudget\$',
+                  style: Theme.of(context).appBarTheme.titleTextStyle?.apply(
+
+                  ),
+                ),
                 bottom: const TabBar(
                   tabs: [
                     Tab(icon: Icon(Icons.list), text: 'Actions',),
@@ -417,27 +463,32 @@ class _CommandPageState extends State<CommandPage> {
                     child: Column(
                       children: [
                         Padding(
-
                           padding: const EdgeInsets.all(5),
-                          child: Row(
+                          child:
+                          Column(
                             children: [
-                              Text(
-                                'Reste:',
-                                style: Theme.of(context).textTheme.headline4?.apply(
-                                    color:  getRest() < 0
-                                        ? negativeRestColor
-                                        : positiveRestColor
-                                ),
-                              ),
-                              const Spacer(),
-                              Text(
-                                  '${getRest()}\$',
-                                  style: Theme.of(context).textTheme.headline4?.apply(
-                                      color:  getRest() < 0
-                                          ? negativeRestColor
-                                          : positiveRestColor
+                              // SizedBox(height: 3,),
+                              Row(
+                                children: [
+                                  Text(
+                                    'Reste:',
+                                    style: Theme.of(context).textTheme.headline4?.apply(
+                                        color:  getRest() < 0
+                                            ? negativeRestColor
+                                            : positiveRestColor
+                                    ),
+                                  ),
+                                  const Spacer(),
+                                  Text(
+                                      '${getRest()}\$',
+                                      style: Theme.of(context).textTheme.headline4?.apply(
+                                          color:  getRest() < 0
+                                              ? negativeRestColor
+                                              : positiveRestColor
+                                      )
                                   )
-                              )
+                                ],
+                              ),
                             ],
                           ),
                         ),
@@ -445,7 +496,7 @@ class _CommandPageState extends State<CommandPage> {
                             child: Padding(
                               padding: const EdgeInsets.all(8.0),
                               child: ElevatedButton(
-                                onPressed:  getRest() >= 0
+                                onPressed:  getRest() >= 0 && canPlay
                                     ? validate
                                     : null,
                                 child: Padding(
@@ -464,12 +515,7 @@ class _CommandPageState extends State<CommandPage> {
             ),
           )
     );
-
-
-
-
   }
-
 }
 
 class LinearData {

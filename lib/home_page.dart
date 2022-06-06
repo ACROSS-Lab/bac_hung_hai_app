@@ -22,15 +22,31 @@ class MyHomePage extends StatefulWidget {
 
 }
 
-class _MyHomePageState extends State<MyHomePage> {
+class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin{
 
-  Socket? socket = null;
+  Socket? socket      = null;
   var ipController    = TextEditingController(text:'192.168.0.195');
   var portController  = TextEditingController(text:'8989');
+  late AnimationController controller;
+  bool loading        = false;
 
+  @override
+  void initState() {
+    controller = AnimationController(
+      vsync: this,
+      duration: const Duration(seconds: 5),
+    )..addListener(() {
+      setState(() {});
+    });
+    controller.repeat(reverse: true);
+    super.initState();
+  }
   Future<void> _try_join() async {
 
     try{
+      setState(() {
+        loading = true;
+      });
 
       print('trying to join the game');
       if (socket != null){
@@ -69,6 +85,9 @@ class _MyHomePageState extends State<MyHomePage> {
               context,
               MaterialPageRoute(builder: (context) => CommandPage(socket: socket!,subscription: subscription!, init_data: data)),
             );
+            setState(() {
+              loading = false;
+            });
           }
         }
     });
@@ -90,6 +109,13 @@ class _MyHomePageState extends State<MyHomePage> {
       body: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
+          Visibility(
+            visible: loading,
+            child: CircularProgressIndicator(
+              value: controller.value,
+              semanticsLabel: 'Linear progress indicator',
+            ),
+          ),
             Row(
               children: [
                 Flexible(
