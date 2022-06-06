@@ -39,7 +39,8 @@ class _CommandPageState extends State<CommandPage> {
 
   final StreamSubscription<Uint8List> subscription;
   final dynamic init_data;
-
+  final Color? positiveRestColor = const Color.fromARGB(255, 18, 114, 18);
+  final Color? negativeRestColor = const Color.fromARGB(255, 236, 9, 9);
 
 
   _CommandPageState({required this.init_data, required this.socket, required this.subscription}) : super() {
@@ -48,37 +49,37 @@ class _CommandPageState extends State<CommandPage> {
 
   void init() async {
 
-    total = init_data['budget'];
+    total = 0;
 
     //Add a listener function to the socket to process received data
     subscription.onData(listenSocket);
 
     //Process initial data to create the list of possible actions
     gameActions = { for (var action in init_data['actions'].map<GameAction>(
-                (action) => GameAction(
-                id: action['id'],
-                name: action['name'],
-                cost: num.parse(action['cost']),
-                once_per_game: action['once_per_game'] == 'true',
-                mandatory: action['mandatory'] == 'true',
-                asset_name: action['asset_name'])
-        ).toList()) action.id : action };
+            (action) => GameAction(
+            id: action['id'],
+            name: action['name'],
+            cost: num.parse(action['cost']),
+            once_per_game: action['once_per_game'] == 'true',
+            mandatory: action['mandatory'] == 'true',
+            asset_name: action['asset_name'],
+            description:  action.containsKey('description')
+                ? action['description']
+                : ''
+        )
+    ).toList()) action.id : action };
   }
 
   void listenSocket(dynamic event) {
 
 
     var mess = utf8.decode(event);
-    // ScaffoldMessenger.of(context).showSnackBar(
-    //   SnackBar(content: Text(mess),),
-    // );
-    print(mess);
+    print("received: " + mess);
     for(var line in mess.split("\n").where((element) => element.trim().replaceAll('\r', '') != '')){
       line = line.trim().replaceAll('\r', '');
       if (line.startsWith("_WATER_")) {
         List<num> data = jsonDecode(line.replaceAll("_WATER_:", '')).cast<num>();
-        print(data);
-
+        // print(data);
         setState((){
           water_pollution = charts.Series(
               id: 'water pollution',
@@ -92,7 +93,7 @@ class _CommandPageState extends State<CommandPage> {
       }
       else if (line.startsWith("_SOLID_")){
         List data = jsonDecode(line.replaceAll("_SOLID_:", '')).cast<num>();
-        print(data);
+        // print(data);
         setState(() {
           solid_pollution = charts.Series<LinearData, int>(
             id: 'Solid pollution',
@@ -105,7 +106,7 @@ class _CommandPageState extends State<CommandPage> {
       }
       else if (line.startsWith("_PRODUCTIVITY_")) {
         List<num> data = jsonDecode(line.replaceAll("_PRODUCTIVITY_:", '')).cast<num>();
-        print(data);
+        // print(data);
         setState(() {
           productivity = charts.Series<LinearData, int>(
               id: 'Productivity',
@@ -120,10 +121,9 @@ class _CommandPageState extends State<CommandPage> {
     }
   }
 
-  int total             = 0;
+  num total             = 0;
   bool wasteCollection  = false;
   bool drainDredge      = false;
-  int rest              =  0;
   Socket socket;
   Map<String, bool> selectedActions   = {};
   Map<String, GameAction> gameActions = {};
@@ -148,25 +148,37 @@ class _CommandPageState extends State<CommandPage> {
       measureFn: (ld, _) => ld.v
   );
 
-  void validate() {
+  //Process the total cost of the actions taken and returns the corresponding list of ids
+  List<String> _processTotal() {
     var takenActions = <String>[];
+    total = 0;
     for(var choice in  activated_switches.keys) {
       if (activated_switches[choice]!){
-        if (group_choices.containsKey(choice)){
-          takenActions.add(group_choices[choice]!);
-        }
-        else{
-          takenActions.add(choice);
-        }
-
+        String id =   group_choices.containsKey(choice)
+            ? group_choices[choice]!
+            : choice;
+        takenActions.add(id);
+        setState(() {
+          total += gameActions[id]!.cost;
+        });
       }
 
     }
-    print(takenActions);
+    return takenActions;
+  }
+
+  //Sends the selected actions to the server (and thus ends the turn)
+  void validate() {
+    var takenActions = _processTotal();
     socket.add(utf8.encode('_AFEOT_:$takenActions\n'));
   }
 
-  //TODO: refactor in a map of pair, or null string for false
+  //Returns the difference between chosen actions costs and the budget
+  num getRest(){
+    return init_data['budget'] - total;
+  }
+
+  //TODO: refactor those two maps in a map of pairs
   Map<String, bool>   activated_switches  = {};
   Map<String, String> group_choices       = {};
   bool alone = false;
@@ -182,7 +194,7 @@ class _CommandPageState extends State<CommandPage> {
     });
 
     var actionGroups = groupBy(gameActions.values, (GameAction action) => action.name);
-    var background_colors = [Colors.grey[300], Colors.white];
+    var backgroundColors = [Colors.grey[300], Colors.white];
     var i = 0;
     for (var group in actionGroups.entries) {
       var first = group.value.first;
@@ -200,6 +212,7 @@ class _CommandPageState extends State<CommandPage> {
             Switch(value: activated_switches[first.id]!, onChanged: (value){
               setState((){
                 activated_switches[first.id] = value;
+                _processTotal();
               });
 
             })
@@ -220,13 +233,14 @@ class _CommandPageState extends State<CommandPage> {
                     onChanged:
                     activated_switches[first.id]??false
                         ? (value){
-                          setState(() {
-                            group_choices[first.id] = value!;
-                          });
+                          group_choices[first.id] = value!;
+                          _processTotal();
                       }
                     : null
                   ),
-                  Text('${action.cost}\$'),
+                  Text('${action.cost}\$',
+                      style: Theme.of(context).textTheme.headline6
+                  ),
                 ],
               ),
             )
@@ -238,45 +252,10 @@ class _CommandPageState extends State<CommandPage> {
           Image.asset('assets/${first.asset_name}', height: 100, width: 100,
           errorBuilder: (context, obj, stack) => Image.asset('assets/waste-collection.png', height: 100, width: 100),)
         );
-      // choicesValues.add(0);
-      // var choices = <Widget>[];
-      //
-      //
-      // // For groups containing more than one item, we create a radio button
-      // if (group.value.length > 1){
-      //   var switchEnabled = true;
-      //   int j = 0;
-      //   if (first['mandatory'] == 'true') {
-      //     choices.add(
-      //       Switch(value: switchEnabled, onChanged: checkboxChanged)
-      //     );
-      //   }
-      //   for (var action in group.value){
-      //     choices.add(
-      //       Column(
-      //         children: [
-      //           Radio(
-      //               value: j,
-      //               groupValue: choicesValues[i],
-      //               onChanged: switchEnabled ? (int? value) {
-      //                 setState(() {
-      //                   print(choicesValues);
-      //                   choicesValues[i] = value!;
-      //                 });
-      //               } : null,
-      //           ),
-      //           Text('${action['cost']}\$'),
-      //         ],
-      //       )
-      //     );
-      //     j++;
-      //   }
-
-
 
         actions.add(
             Container(
-              color: background_colors[i%2],
+              color: backgroundColors[i%2],
               child:
               Padding(
                 padding: EdgeInsets.all(8),
@@ -284,7 +263,7 @@ class _CommandPageState extends State<CommandPage> {
                     children: [
                       Padding(padding: EdgeInsets.all(3),
                         child: Text(
-                          '${first.name}',
+                          first.name,
                           textAlign: TextAlign.center,
                           style: Theme.of(context).textTheme.headline4,
                         ),
@@ -295,6 +274,14 @@ class _CommandPageState extends State<CommandPage> {
 
                         ,
                       ),
+                      Align(
+                        alignment: Alignment.centerLeft,
+                        child: Text(
+                          first.description,
+                          textAlign: TextAlign.left,
+                          style: Theme.of(context).textTheme.headline6,
+                        ),
+                      )
                     ]
                 ),
               ),
@@ -308,7 +295,7 @@ class _CommandPageState extends State<CommandPage> {
         var action = group.value.first;
         actions.add(
             Container(
-              color: background_colors[i%2],
+              color: backgroundColors[i%2],
               child:
               Padding(
                 padding: const EdgeInsets.all(8),
@@ -317,7 +304,7 @@ class _CommandPageState extends State<CommandPage> {
                       Padding(
                         padding: const EdgeInsets.all(3),
                         child: Text(
-                          '${action.name}',
+                          action.name,
                           textAlign: TextAlign.center,
                           style: Theme.of(context).textTheme.headline4,
                         ),
@@ -325,19 +312,27 @@ class _CommandPageState extends State<CommandPage> {
                       Row(
                         children: [
                           Switch(
-                              value: activated_switches[action.id]!,
+                              value: activated_switches[first.id]!,
                               onChanged: (value){
-                                setState((){
-                                    activated_switches[first.id] = value;
-                                });
+                                activated_switches[first.id] = value;
+                                _processTotal();
                               }),
-                          Text('${action.cost}\$'),
+                          Text('${action.cost}\$',
+                              style: Theme.of(context).textTheme.headline6),
                           const Spacer(),
                           Image.asset('assets/${action.asset_name}', height: 100, width: 100,
                                       errorBuilder: (_context, obj, stack) => Image.asset('assets/waste-collection.png', height: 100, width: 100),)
                           //Image.asset('assets/drain-dredge.png', height: 100, width: 100,),
                         ],
                       ),
+                      Align(
+                        alignment: Alignment.centerLeft,
+                        child: Text(
+                          action.description,
+                          textAlign: TextAlign.left,
+                          style: Theme.of(context).textTheme.headline6,
+                        ),
+                      )
                     ]
                 ),
               ),
@@ -354,7 +349,7 @@ class _CommandPageState extends State<CommandPage> {
             length: 2,
             child: Scaffold(
               appBar: AppBar(
-                title: Text('${widget.player_name}: $total\$'),
+                title: Text('${widget.player_name}: ${init_data['budget']}\$'),
                 bottom: const TabBar(
                   tabs: [
                     Tab(icon: Icon(Icons.list), text: 'Actions',),
@@ -390,7 +385,6 @@ class _CommandPageState extends State<CommandPage> {
                               ),
                             )
                         ),
-
                       ],
                     ),
                   ),
@@ -400,17 +394,38 @@ class _CommandPageState extends State<CommandPage> {
                       children: [
                         Text(
                           'Reste:',
-                          style: Theme.of(context).textTheme.headline4,
+                          style: Theme.of(context).textTheme.headline4?.apply(
+                            color:  getRest() < 0
+                                  ? negativeRestColor
+                                  : positiveRestColor
+                          ),
                         ),
                         const Spacer(),
                         Text(
-                          '${rest}\$',
-                          style: Theme.of(context).textTheme.headline4,
+                          '${getRest()}\$',
+                            style: Theme.of(context).textTheme.headline4?.apply(
+                                color:  getRest() < 0
+                                    ? negativeRestColor
+                                    : positiveRestColor
+                            )
                         )
                       ],
                     ),
                   ),
-                  Center(child: ElevatedButton(onPressed: validate,child: const Text('Valider le tour'),))
+                  Center(
+                      child: Padding(
+                        padding: const EdgeInsets.all(8.0),
+                        child: ElevatedButton(
+                                onPressed:  getRest() >= 0
+                                          ? validate
+                                          : null,
+                                child: Padding(
+                                  padding: const EdgeInsets.all(8.0),
+                                  child: Text('Valider le tour', style: Theme.of(context).textTheme.headline5),
+                                ),
+                        ),
+                      )
+                  )
                 ],
               ),
             ),
