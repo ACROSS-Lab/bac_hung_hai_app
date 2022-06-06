@@ -10,6 +10,7 @@ import 'package:flutter/material.dart';
 import 'package:charts_flutter/flutter.dart' as charts;
 import 'package:flutter/material.dart';
 
+
 class CommandPage extends StatefulWidget {
 
   final Socket  socket;
@@ -53,9 +54,11 @@ class _CommandPageState extends State<CommandPage> {
   void init() async {
 
     total                   = 0;
-    canPlay                 = true;
+    canPlay                 = false;
     turnBudget              = init_data['budget'];
     turnNumber              = 1;
+
+
 
     //Add a listener function to the socket to process received data
     subscription.onData(listenSocket);
@@ -76,63 +79,72 @@ class _CommandPageState extends State<CommandPage> {
     ).toList()) action.id : action };
   }
 
+  String currentBuffer = '';
   void listenSocket(dynamic event) {
 
     var mess = utf8.decode(event);
     print("received: " + mess);
-    for(var line in mess.split("\n").where((element) => element.trim().replaceAll('\r', '') != '')){
-      line = line.trim().replaceAll('\r', '');
-      if (line.startsWith("_WATER_")) {
-        List<num> data = jsonDecode(line.replaceAll("_WATER_:", '')).cast<num>();
-        // print(data);
-        setState((){
-          water_pollution = charts.Series(
-              id: 'water pollution',
-              colorFn: (_, __) => charts.MaterialPalette.deepOrange.shadeDefault,
-              data: data.mapIndexed((i, v) => LinearData(i, v)).toList(),
-              domainFn: (ld,_) => ld.i,
-              measureFn: (ld, _) => ld.v
-            );
-        });
 
+      mess = currentBuffer + mess;
+      currentBuffer = "";
+      var lines = mess  .split("\n")
+                        .where((element) => element.trim().replaceAll('\r', '') != '')
+                        .toList();
+      if (!mess.endsWith('\n')){
+        currentBuffer = lines.last;
+        lines.removeLast();
       }
-      else if (line.startsWith("_SOLID_")){
-        List data = jsonDecode(line.replaceAll("_SOLID_:", '')).cast<num>();
-        // print(data);
-        setState(() {
-          solid_pollution = charts.Series<LinearData, int>(
-            id: 'Solid pollution',
-            colorFn: (_, __) => charts.MaterialPalette.teal.shadeDefault,
-            domainFn: (LinearData datum, _) => datum.i,
-            measureFn: (LinearData datum, _) => datum.v,
-            data: data.mapIndexed((i, v) => LinearData(i, v)).toList(),
-          );
-        });
-      }
-      else if (line.startsWith("_PRODUCTIVITY_")) {
-        List<num> data = jsonDecode(line.replaceAll("_PRODUCTIVITY_:", '')).cast<num>();
-        // print(data);
-        setState(() {
-          productivity = charts.Series<LinearData, int>(
+      for(var line in lines){
+        line = line.trim().replaceAll('\r', '');
+        if (line.startsWith("_WATER_")) {
+          List<num> data = jsonDecode(line.replaceAll("_WATER_:", '')).cast<num>();
+          // print(data);
+          setState((){
+            water_pollution = charts.Series(
+                id: 'water pollution',
+                colorFn: (_, __) => charts.MaterialPalette.deepOrange.shadeDefault,
+                data: data.mapIndexed((i, v) => LinearData(i, v)).toList(),
+                domainFn: (ld,_) => ld.i,
+                measureFn: (ld, _) => ld.v
+            );
+          });
+
+        }
+        else if (line.startsWith("_SOLID_")){
+          List data = jsonDecode(line.replaceAll("_SOLID_:", '')).cast<num>();
+          // print(data);
+          setState(() {
+            solid_pollution = charts.Series<LinearData, int>(
+              id: 'Solid pollution',
+              colorFn: (_, __) => charts.MaterialPalette.teal.shadeDefault,
+              domainFn: (LinearData datum, _) => datum.i,
+              measureFn: (LinearData datum, _) => datum.v,
+              data: data.mapIndexed((i, v) => LinearData(i, v)).toList(),
+            );
+          });
+        }
+        else if (line.startsWith("_PRODUCTIVITY_")) {
+          List<num> data = jsonDecode(line.replaceAll("_PRODUCTIVITY_:", '')).cast<num>();
+          // print(data);
+          setState(() {
+            productivity = charts.Series<LinearData, int>(
               id: 'Productivity',
               colorFn: (_, __) => charts.MaterialPalette.blue.shadeDefault,
               domainFn: (LinearData datum, _) => datum.i,
               measureFn: (LinearData datum, _) => datum.v,
               data: data.mapIndexed((i, v) => LinearData(i, v)).toList(),
-          );
-        });
+            );
+          });
+        }
+        else if (line.startsWith("_START_TURN_")) {
+          var turnData = jsonDecode(line.replaceAll("_START_TURN_:", ''));
+          setState(() {
+            canPlay = true;
+            turnBudget = turnData['budget'];
+            turnNumber = turnData['turn'];
+          });
+        }
       }
-      else if (line.startsWith("_START_TURN_")) {
-        var turnData = jsonDecode(line.replaceAll("_START_TURN_:", ''));
-        setState(() {
-          canPlay = true;
-          turnBudget = turnData['budget'];
-          turnNumber = turnData['turn'];
-        });
-
-
-      }
-    }
   }
 
   num turnBudget        = 0;
@@ -190,7 +202,8 @@ class _CommandPageState extends State<CommandPage> {
       var takenActions = _processTotal();
       socket.add(utf8.encode('_AFEOT_:$takenActions\n'));
       await socket.flush();
-      //Deleting the actions only available once per game
+
+      //Deleting the actions only available once per game and resetting the others
       for(var id in takenActions) {
         if (gameActions[id]!.once_per_game) {
           gameActions.remove(id);
@@ -198,6 +211,11 @@ class _CommandPageState extends State<CommandPage> {
           group_choices.remove(id);
         }
       }
+      setState((){
+        for (var k in activated_switches.keys){
+          activated_switches[k] = false;
+        }
+      });
     }
     catch(exception) {
       canPlay =  true;
@@ -383,7 +401,30 @@ class _CommandPageState extends State<CommandPage> {
 
     _processTotal(); //To get the first total right
 
-    return Scaffold(
+    return WillPopScope(
+        onWillPop: () async {
+      bool willLeave = false;
+      // show the confirm dialog
+      await showDialog(
+          context: context,
+          builder: (_) => AlertDialog(
+        title: const Text('Êtes-vous sûr de vouloir quitter?'),
+        actions: [
+          ElevatedButton(
+              onPressed: () {
+                willLeave = true;
+                Navigator.of(context).pop();
+              },
+              child: const Text('Oui')),
+          TextButton(
+              onPressed: () => Navigator.of(context).pop(),
+              child: const Text('Non'))
+        ],
+      ));
+    return willLeave;
+    },
+    child:
+      Scaffold(
 
       body:
           DefaultTabController(
@@ -514,6 +555,7 @@ class _CommandPageState extends State<CommandPage> {
               ),
             ),
           )
+      )
     );
   }
 }

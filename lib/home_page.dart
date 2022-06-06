@@ -10,6 +10,8 @@ import 'dart:async';
 import 'package:web_socket_channel/io.dart';
 import 'package:web_socket_channel/status.dart' as status;
 import 'command_page.dart';
+import 'package:wakelock/wakelock.dart';
+
 
 class MyHomePage extends StatefulWidget {
 
@@ -25,13 +27,16 @@ class MyHomePage extends StatefulWidget {
 class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin{
 
   Socket? socket      = null;
-  var ipController    = TextEditingController(text:'192.168.0.195');
+  var ipController    = TextEditingController(text:'192.168.98.118');
   var portController  = TextEditingController(text:'8989');
   late AnimationController controller;
   bool loading        = false;
 
   @override
   void initState() {
+    // Prevent screen from going into sleep mode:
+    Wakelock.enable();
+
     controller = AnimationController(
       vsync: this,
       duration: const Duration(seconds: 5),
