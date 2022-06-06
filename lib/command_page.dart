@@ -370,20 +370,43 @@ class _CommandPageState extends State<CommandPage> {
                             children: actions,
                           ),
                         ),
-                        Expanded(
-                            child:
-                            Padding(
-                              padding:
-                              const EdgeInsets.all(8.0),
-                              child: charts.LineChart(
-                                [
-                                  solid_pollution,
-                                  water_pollution,
-                                  productivity,
+                        Padding(
+                          padding:
+                          const EdgeInsets.all(8.0),
+                          child: ListView(
+                            children:
+                            [
+                              //TODO: change for a flexible layout
+                              Column(
+                                children: [
+                                  Text("Productivité",style: Theme.of(context).textTheme.headline3,),
+                                  SizedBox(
+                                    height: 100,
+                                    child: charts.LineChart(
+                                      [
+                                        productivity,
+                                      ],
+                                      animate: true,
+                                    ),
+                                  ),
+                                  const SizedBox(height: 50,),
+                                  Text("Pollution",style: Theme.of(context).textTheme.headline3,),
+                                  SizedBox(
+                                    height: 400,
+                                    child: charts.LineChart(
+                                    [
+                                      solid_pollution,
+                                      water_pollution,
+                                    ],
+                                    animate: true,
+                                  )
+                                )
+
                                 ],
-                                animate: true,
                               ),
-                            )
+                            ]
+
+                          ),
                         ),
                       ],
                     ),
