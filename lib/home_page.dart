@@ -25,19 +25,12 @@ class MyHomePage extends StatefulWidget {
 class _MyHomePageState extends State<MyHomePage> {
 
   Socket? socket = null;
-  var ipController    = TextEditingController(text:'192.168.17.97');
+  var ipController    = TextEditingController(text:'192.168.0.195');
   var portController  = TextEditingController(text:'8989');
 
   Future<void> _try_join() async {
 
-
     try{
-
-      /*
-      final channel = IOWebSocketChannel.connect(
-      Uri.parse('ws://192.168.98.118:8989'),
-      );
-      */
 
       print('trying to join the game');
       if (socket != null){
@@ -45,16 +38,7 @@ class _MyHomePageState extends State<MyHomePage> {
       }
       socket = await Socket.connect(ipController.text, int.parse(portController.text));
 
-      print("connected");
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Connected !'),
-        ),
-      );
-
       await push_command_page();
-
-
 
     }
     catch (exception) {
@@ -71,63 +55,25 @@ class _MyHomePageState extends State<MyHomePage> {
 
   StreamSubscription<Uint8List>? subscription;
   Future<void> push_command_page() async {
+
     // listen to the received data event stream
     subscription = socket?.listen((event)  {
         var mess = utf8.decode(event);
-        // ScaffoldMessenger.of(context).showSnackBar(
-        //   SnackBar(content: Text(mess),),
-        // );
         print(mess);
         for(var line in mess.split("\n").where((element) => element.trim() != '')){
 
+          //If we receive the "init" data, it means we are accepted as a player and thus can push the game page
           if (line.startsWith("_INIT_DATA_")) {
             var data = jsonDecode(line.replaceAll("_INIT_DATA_:", ''));
-            print("player_name:" + data['player_name']);
-//            subscription?.cancel();
-              Navigator.push(
-                context,
-                MaterialPageRoute(builder: (context) => CommandPage(socket: socket!,subscription: subscription!,init_data: data)),
-              );
-
+            Navigator.push(
+              context,
+              MaterialPageRoute(builder: (context) => CommandPage(socket: socket!,subscription: subscription!, init_data: data)),
+            );
           }
-
         }
-
-        print(mess);
     });
 
-    // socket?.listen((List<int> event) {
-    //
-    //   var mess = utf8.decode(event);
-    //   ScaffoldMessenger.of(context).showSnackBar(
-    //     SnackBar(content: Text(mess),),
-    //   );
-    //   print(mess);
-    //   for(var line in mess.split("\n").where((element) => element.trim() != '')){
-    //
-    //     if (line.startsWith("_INIT_DATA_")) {
-    //       var data = jsonDecode(line.replaceAll("_INIT_DATA_:", ''));
-    //       print("player_name:" + data['player_name']);
-    //       subscription?.cancel();
-    //       Navigator.push(
-    //         context,
-    //         MaterialPageRoute(builder: (context) => CommandPage(socket: socket!,init_data: data)),
-    //       );
-    //     }
-    //
-    //   }
-    //
-    //   print(mess);
-    //
-    // });
-    //
-    // // channel.stream.listen((message) {
-    // //   print(message);
-    // // });
-    // //
-    // // channel.sink.add('_AFC_:192.168.98.110\n');
-    //
-    // send hello
+    // Send request for connection
     socket?.add(utf8.encode('_AFC_:${socket?.address.address}\n'));
     await socket?.flush();
 
@@ -139,7 +85,7 @@ class _MyHomePageState extends State<MyHomePage> {
 
     return Scaffold(
       appBar: AppBar(
-        title: Text('${widget.title}'),
+        title: Text(widget.title),
       ),
       body: Column(
         mainAxisAlignment: MainAxisAlignment.center,
@@ -175,7 +121,16 @@ class _MyHomePageState extends State<MyHomePage> {
             Column(
               mainAxisAlignment: MainAxisAlignment.center,
               children: <Widget>[
-                ElevatedButton(onPressed: _try_join, child: const Text('Join the game !'),)
+                Padding(
+                  padding: const EdgeInsets.all(10.0),
+                  child: ElevatedButton(
+                    onPressed: _try_join,
+                    child: Text(
+                        'Join the game !',
+                      style: Theme.of(context).textTheme.headline5,
+                    ),
+                  ),
+                )
               ],
             ),
           ]),
