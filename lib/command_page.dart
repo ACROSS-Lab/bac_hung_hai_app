@@ -38,7 +38,7 @@ class _CommandPageState extends State<CommandPage> {
 
 
 
-  final StreamSubscription<Uint8List> subscription;
+  StreamSubscription<Uint8List> subscription;
   final dynamic init_data;
   final Color? positiveRestColor = const Color.fromARGB(255, 18, 114, 18);
   final Color? negativeRestColor = const Color.fromARGB(255, 236, 9, 9);
@@ -51,6 +51,83 @@ class _CommandPageState extends State<CommandPage> {
     init();
   }
 
+  void _tryReconnect() async {
+    try {
+      print("trying to reconnect to the server");
+      socket = await Socket.connect(socket.address, socket.remotePort);
+      subscription = socket.listen((event)=>{});
+
+      init_subscription();
+
+      print("sending reconnection message");
+      socket.add(utf8.encode("_AFC_:player_name:\"${widget.player_name}\"\n"));
+      socket.flush();
+
+    }
+    catch (exception) {
+      print(exception.toString());
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(exception.toString()),
+        ),
+      );
+    }
+  }
+
+
+  void init_subscription() async {
+    //Add exception handling for the connection
+    subscription.onError((error) => showDialog(
+      context: context,
+      builder: (BuildContext context) =>
+        AlertDialog(
+          title: const Text('Error'),
+          content: Text(error),
+          actions: <Widget>[
+            TextButton(
+              onPressed: () => Navigator.pop(context, 'Cancel'),
+              child: const Text('Ok'),
+            ),
+            TextButton(
+              onPressed: () {
+                _tryReconnect();
+                Navigator.pop(context, 'OK');
+              },
+              child: const Text('Try reconnect'),
+            ),
+          ],
+        ),
+      )
+    );
+
+
+    subscription.onDone(() => showDialog(
+      context: context,
+      builder: (BuildContext context) =>
+        AlertDialog(
+          title: const Text('Done'),
+          content: const Text('Connection closed'),
+          actions: <Widget>[
+            TextButton(
+              onPressed: () => Navigator.pop(context, 'Cancel'),
+              child: const Text('Ok'),
+            ),
+            TextButton(
+              onPressed: () {
+                _tryReconnect();
+                Navigator.pop(context, 'OK');
+              },
+              child: const Text('Try reconnect'),
+            ),
+          ],
+        ),
+      )
+    );
+
+    //Add a listener function to the socket to process received data
+    subscription.onData(listenSocket);
+  }
+
   void init() async {
 
     total                   = 0;
@@ -58,10 +135,8 @@ class _CommandPageState extends State<CommandPage> {
     turnBudget              = init_data['budget'];
     turnNumber              = 1;
 
+    init_subscription();
 
-
-    //Add a listener function to the socket to process received data
-    subscription.onData(listenSocket);
 
     //Process initial data to create the list of possible actions
     gameActions = { for (var action in init_data['actions'].map<GameAction>(
@@ -85,66 +160,67 @@ class _CommandPageState extends State<CommandPage> {
     var mess = utf8.decode(event);
     print("received: " + mess);
 
-      mess = currentBuffer + mess;
-      currentBuffer = "";
-      var lines = mess  .split("\n")
-                        .where((element) => element.trim().replaceAll('\r', '') != '')
-                        .toList();
-      if (!mess.endsWith('\n')){
-        currentBuffer = lines.last;
-        lines.removeLast();
-      }
-      for(var line in lines){
-        line = line.trim().replaceAll('\r', '');
-        if (line.startsWith("_WATER_")) {
-          List<num> data = jsonDecode(line.replaceAll("_WATER_:", '')).cast<num>();
-          // print(data);
-          setState((){
-            water_pollution = charts.Series(
-                id: 'water pollution',
-                colorFn: (_, __) => charts.MaterialPalette.deepOrange.shadeDefault,
-                data: data.mapIndexed((i, v) => LinearData(i, v)).toList(),
-                domainFn: (ld,_) => ld.i,
-                measureFn: (ld, _) => ld.v
-            );
-          });
+    mess = currentBuffer + mess;
+    currentBuffer = "";
+    var lines = mess  .split("\n")
+                      .where((element) => element.trim().replaceAll('\r', '') != '')
+                      .toList();
+    if (!mess.endsWith('\n')){
+      print("buffered: " + currentBuffer);
+      currentBuffer = lines.last;
+      lines.removeLast();
+    }
+    for(var line in lines){
+      line = line.trim().replaceAll('\r', '');
+      if (line.startsWith("_WATER_")) {
+        List<num> data = jsonDecode(line.replaceAll("_WATER_:", '')).cast<num>();
+        // print(data);
+        setState((){
+          water_pollution = charts.Series(
+              id: 'water pollution',
+              colorFn: (_, __) => charts.MaterialPalette.deepOrange.shadeDefault,
+              data: data.mapIndexed((i, v) => LinearData(i, v)).toList(),
+              domainFn: (ld,_) => ld.i,
+              measureFn: (ld, _) => ld.v
+          );
+        });
 
-        }
-        else if (line.startsWith("_SOLID_")){
-          List data = jsonDecode(line.replaceAll("_SOLID_:", '')).cast<num>();
-          // print(data);
-          setState(() {
-            solid_pollution = charts.Series<LinearData, int>(
-              id: 'Solid pollution',
-              colorFn: (_, __) => charts.MaterialPalette.teal.shadeDefault,
-              domainFn: (LinearData datum, _) => datum.i,
-              measureFn: (LinearData datum, _) => datum.v,
-              data: data.mapIndexed((i, v) => LinearData(i, v)).toList(),
-            );
-          });
-        }
-        else if (line.startsWith("_PRODUCTIVITY_")) {
-          List<num> data = jsonDecode(line.replaceAll("_PRODUCTIVITY_:", '')).cast<num>();
-          // print(data);
-          setState(() {
-            productivity = charts.Series<LinearData, int>(
-              id: 'Productivity',
-              colorFn: (_, __) => charts.MaterialPalette.blue.shadeDefault,
-              domainFn: (LinearData datum, _) => datum.i,
-              measureFn: (LinearData datum, _) => datum.v,
-              data: data.mapIndexed((i, v) => LinearData(i, v)).toList(),
-            );
-          });
-        }
-        else if (line.startsWith("_START_TURN_")) {
-          var turnData = jsonDecode(line.replaceAll("_START_TURN_:", ''));
-          setState(() {
-            canPlay = true;
-            turnBudget = turnData['budget'];
-            turnNumber = turnData['turn'];
-          });
-        }
       }
+      else if (line.startsWith("_SOLID_")){
+        List data = jsonDecode(line.replaceAll("_SOLID_:", '')).cast<num>();
+        // print(data);
+        setState(() {
+          solid_pollution = charts.Series<LinearData, int>(
+            id: 'Solid pollution',
+            colorFn: (_, __) => charts.MaterialPalette.teal.shadeDefault,
+            domainFn: (LinearData datum, _) => datum.i,
+            measureFn: (LinearData datum, _) => datum.v,
+            data: data.mapIndexed((i, v) => LinearData(i, v)).toList(),
+          );
+        });
+      }
+      else if (line.startsWith("_PRODUCTIVITY_")) {
+        List<num> data = jsonDecode(line.replaceAll("_PRODUCTIVITY_:", '')).cast<num>();
+        // print(data);
+        setState(() {
+          productivity = charts.Series<LinearData, int>(
+            id: 'Productivity',
+            colorFn: (_, __) => charts.MaterialPalette.blue.shadeDefault,
+            domainFn: (LinearData datum, _) => datum.i,
+            measureFn: (LinearData datum, _) => datum.v,
+            data: data.mapIndexed((i, v) => LinearData(i, v)).toList(),
+          );
+        });
+      }
+      else if (line.startsWith("_START_TURN_")) {
+        var turnData = jsonDecode(line.replaceAll("_START_TURN_:", ''));
+        setState(() {
+          canPlay = true;
+          turnBudget = turnData['budget'];
+          turnNumber = turnData['turn'];
+        });
+      }
+    }
   }
 
   num turnBudget        = 0;
@@ -263,15 +339,14 @@ class _CommandPageState extends State<CommandPage> {
           if (! activated_switches.containsKey(first.id)) {
             activated_switches[first.id] = false;
           }
-          choices.add(
-            Switch(value: activated_switches[first.id]!, onChanged: (value){
-              setState((){
-                activated_switches[first.id] = value;
-                _processTotal();
-              });
+          choices.add(Switch(value: activated_switches[first.id]!, onChanged: (value){
 
-            })
-          );
+                  setState((){
+                    activated_switches[first.id] = value;
+                    _processTotal();
+                  });
+
+                }));
         }
         else {
             activated_switches[first.id] = true;
@@ -309,14 +384,22 @@ class _CommandPageState extends State<CommandPage> {
         );
 
         actions.add(
-            Container(
+          Container(
+            color:  first.mandatory
+                ? Colors.red
+                : backgroundColors[i%2],
+            child:
+            Padding(
+                padding: const EdgeInsets.all(3.0),
+                child:
+                    Container(
               color: backgroundColors[i%2],
               child:
               Padding(
-                padding: EdgeInsets.all(8),
+                padding: const EdgeInsets.all(8),
                 child: Column(
                     children: [
-                      Padding(padding: EdgeInsets.all(3),
+                      Padding(padding: const EdgeInsets.all(3),
                         child: Text(
                           first.name,
                           textAlign: TextAlign.center,
@@ -341,7 +424,9 @@ class _CommandPageState extends State<CommandPage> {
                 ),
               ),
             )
-        );
+        ),
+            )
+            ,);
       }
       else {
         if (! activated_switches.containsKey(first.id)) {
@@ -434,9 +519,20 @@ class _CommandPageState extends State<CommandPage> {
                 title: Text(
                   '${widget.player_name} \t Tour $turnNumber \t $turnBudget\$',
                   style: Theme.of(context).appBarTheme.titleTextStyle?.apply(
-
                   ),
                 ),
+                actions: [
+                  Padding(
+                      padding: EdgeInsets.only(right: 20.0),
+                      child: GestureDetector(
+                        onTap: _tryReconnect,
+                        child: const Icon(
+                          Icons.loop,
+                          size: 26.0,
+                        ),
+                      )
+                  )
+                ],
                 bottom: const TabBar(
                   tabs: [
                     Tab(icon: Icon(Icons.list), text: 'Actions',),

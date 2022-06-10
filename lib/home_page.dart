@@ -27,7 +27,7 @@ class MyHomePage extends StatefulWidget {
 class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin{
 
   Socket? socket      = null;
-  var ipController    = TextEditingController(text:'192.168.98.118');
+  var ipController    = TextEditingController(text:'192.168.0.196');
   var portController  = TextEditingController(text:'8989');
   late AnimationController controller;
   bool loading        = false;
@@ -64,6 +64,11 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin{
     }
     catch (exception) {
       print(exception.toString());
+      setState(() {
+        controller.stop();
+        loading = false;
+      });
+
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(exception.toString()),
