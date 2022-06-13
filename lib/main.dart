@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'home_page.dart';
-
-
+import 'package:flutter_localizations/flutter_localizations.dart';
 
 void main() {
   runApp(const BHHGameClient());
@@ -17,6 +16,16 @@ class BHHGameClient extends StatelessWidget {
   Widget build(BuildContext context) {
     return MaterialApp(
       title: 'Waste management simulation',
+      localizationsDelegates: [
+        GlobalMaterialLocalizations.delegate,
+        GlobalWidgetsLocalizations.delegate,
+        GlobalCupertinoLocalizations.delegate,
+      ],
+      supportedLocales: const [
+        Locale('en', ''),
+        Locale('fr', ''),
+        Locale('vn', ''),
+      ],
       theme: ThemeData(
         primarySwatch: Colors.lime,
       ),

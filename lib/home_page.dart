@@ -27,7 +27,7 @@ class MyHomePage extends StatefulWidget {
 class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin{
 
   Socket? socket      = null;
-  var ipController    = TextEditingController(text:'192.168.0.196');
+  var ipController    = TextEditingController(text:'192.168.0.195');
   var portController  = TextEditingController(text:'8989');
   late AnimationController controller;
   bool loading        = false;
@@ -84,22 +84,40 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin{
 
     // listen to the received data event stream
     subscription = socket?.listen((event)  {
-        var mess = utf8.decode(event);
+      try {
+        var mess = utf8.decode(event, allowMalformed: true);
         print(mess);
-        for(var line in mess.split("\n").where((element) => element.trim() != '')){
-
+        for (var line in mess.split("\n").where((element) =>
+        element.trim() != '')) {
           //If we receive the "init" data, it means we are accepted as a player and thus can push the game page
           if (line.startsWith("_INIT_DATA_")) {
             var data = jsonDecode(line.replaceAll("_INIT_DATA_:", ''));
             Navigator.push(
               context,
-              MaterialPageRoute(builder: (context) => CommandPage(socket: socket!,subscription: subscription!, init_data: data)),
+              MaterialPageRoute(builder: (context) => CommandPage(
+                  socket: socket!,
+                  subscription: subscription!,
+                  init_data: data)),
             );
             setState(() {
               loading = false;
             });
           }
         }
+      }
+      catch (exception) {
+        print(exception.toString());
+        setState(() {
+        controller.stop();
+        loading = false;
+        });
+
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(exception.toString()),
+          ),
+        );
+      }
     });
 
     // Send request for connection

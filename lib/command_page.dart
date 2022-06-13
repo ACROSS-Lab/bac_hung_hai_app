@@ -82,7 +82,7 @@ class _CommandPageState extends State<CommandPage> {
       builder: (BuildContext context) =>
         AlertDialog(
           title: const Text('Error'),
-          content: Text(error),
+          content: Text(error.toString()),
           actions: <Widget>[
             TextButton(
               onPressed: () => Navigator.pop(context, 'Cancel'),
@@ -157,7 +157,7 @@ class _CommandPageState extends State<CommandPage> {
   String currentBuffer = '';
   void listenSocket(dynamic event) {
 
-    var mess = utf8.decode(event);
+    var mess = utf8.decode(event, allowMalformed: true);
     print("received: " + mess);
 
     mess = currentBuffer + mess;
