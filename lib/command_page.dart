@@ -15,11 +15,14 @@ class CommandPage extends StatefulWidget {
 
   final Socket  socket;
   final String  player_name;
+  final int     player_number;
  // final int     init_budget;
   final dynamic init_data;
   final StreamSubscription<Uint8List> subscription;
+  final String buffer;
 
-  CommandPage({Key? key, required this.socket, required this.init_data, required this.subscription}) :
+
+  CommandPage({Key? key, required this.socket, required this.init_data, required this.subscription, required this.player_number, required this.buffer}) :
       player_name = init_data['player_name'],
    //   init_budget = init_data['budget'],
       super(key: key)
@@ -28,7 +31,7 @@ class CommandPage extends StatefulWidget {
 
   @override
   State<StatefulWidget> createState() {
-    return _CommandPageState(init_data: init_data, socket: socket, subscription: subscription);
+    return _CommandPageState(init_data: init_data, socket: socket, subscription: subscription, currentBuffer: buffer);
   }
   
 }
@@ -45,9 +48,10 @@ class _CommandPageState extends State<CommandPage> {
   dynamic turnData;
   int turnNumber              = 0;
   bool canPlay                = false;
+  String currentBuffer;
 
 
-  _CommandPageState({required this.init_data, required this.socket, required this.subscription}) : super() {
+  _CommandPageState({required this.init_data, required this.socket, required this.subscription,required this.currentBuffer}) : super() {
     init();
   }
 
@@ -60,7 +64,7 @@ class _CommandPageState extends State<CommandPage> {
       init_subscription();
 
       print("sending reconnection message");
-      socket.add(utf8.encode("_AFC_:player_name:\"${widget.player_name}\"\n"));
+      socket.add(utf8.encode("_AFC_:${widget.player_number}\"\n"));
       socket.flush();
 
     }
@@ -152,9 +156,9 @@ class _CommandPageState extends State<CommandPage> {
                         : ''
         )
     ).toList()) action.id : action };
+
   }
 
-  String currentBuffer = '';
   void listenSocket(dynamic event) {
 
     var mess = utf8.decode(event, allowMalformed: true);
@@ -215,10 +219,16 @@ class _CommandPageState extends State<CommandPage> {
       else if (line.startsWith("_START_TURN_")) {
         var turnData = jsonDecode(line.replaceAll("_START_TURN_:", ''));
         setState(() {
-          canPlay = true;
+          //canPlay = true;
           turnBudget = turnData['budget'];
           turnNumber = turnData['turn'];
         });
+      }
+      else if (line.startsWith("_YT_")) {
+        setState(() => canPlay = true);
+      }
+      else if (line.startsWith("_NYT_")){
+        setState(() => canPlay = false);
       }
     }
   }
@@ -315,6 +325,11 @@ class _CommandPageState extends State<CommandPage> {
   bool alone = false;
   @override
   Widget build(BuildContext context) {
+    //Process the buffer from previous page
+    if (currentBuffer != '') {
+      listenSocket(Uint8List(0));
+    }
+
     var actions = <Widget>[];
 
     //Initializes all actions as not selected

@@ -29,6 +29,8 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin{
   Socket? socket      = null;
   var ipController    = TextEditingController(text:'192.168.0.195');
   var portController  = TextEditingController(text:'8989');
+  var playerController= TextEditingController(text: '1');
+
   late AnimationController controller;
   bool loading        = false;
 
@@ -87,17 +89,20 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin{
       try {
         var mess = utf8.decode(event, allowMalformed: true);
         print(mess);
-        for (var line in mess.split("\n").where((element) =>
-        element.trim() != '')) {
+        for (var line in mess.split("\n").where((element) => element.trim() != '')) {
           //If we receive the "init" data, it means we are accepted as a player and thus can push the game page
           if (line.startsWith("_INIT_DATA_")) {
             var data = jsonDecode(line.replaceAll("_INIT_DATA_:", ''));
             Navigator.push(
               context,
               MaterialPageRoute(builder: (context) => CommandPage(
-                  socket: socket!,
-                  subscription: subscription!,
-                  init_data: data)),
+                socket: socket!,
+                subscription: subscription!,
+                init_data: data,
+                player_number: int.parse(playerController.text),
+                buffer: mess,
+                )
+              ),
             );
             setState(() {
               loading = false;
@@ -121,7 +126,7 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin{
     });
 
     // Send request for connection
-    socket?.add(utf8.encode('_AFC_:${socket?.address.address}\n'));
+    socket?.add(utf8.encode('_AFC_:${playerController.text}\n'));
     await socket?.flush();
 
   }
@@ -144,50 +149,63 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin{
               semanticsLabel: 'Linear progress indicator',
             ),
           ),
-            Row(
-              children: [
-                Flexible(
-                  flex: 3,
-                  child: Padding(
-                    padding: const EdgeInsets.all(8.0),
-                    child: TextField(
-                      controller: ipController,
-                      decoration: const InputDecoration(
-                        border: OutlineInputBorder(),
-                        labelText: 'IP',
-                      ),
+          Row(
+            children: [
+              Expanded(child:
+              TextField(
+                controller: playerController,
+                decoration: const InputDecoration(
+                  border: OutlineInputBorder(),
+                  labelText: 'Player number',
+                ),
+                keyboardType: TextInputType.number,
+              ))
+            ],
+          ),
+          Row(
+            children: [
+              Flexible(
+                flex: 3,
+                child: Padding(
+                  padding: const EdgeInsets.all(8.0),
+                  child: TextField(
+                    controller: ipController,
+                    decoration: const InputDecoration(
+                      border: OutlineInputBorder(),
+                      labelText: 'IP',
                     ),
                   ),
                 ),
-                Flexible(child:
-                Padding(
-                    padding: const EdgeInsets.all(8),
-                    child: TextField(
-                  controller: portController,
-                  decoration: const InputDecoration(
-                    border: OutlineInputBorder(),
-                    labelText: 'Port',
+              ),
+              Flexible(child:
+              Padding(
+                  padding: const EdgeInsets.all(8),
+                  child: TextField(
+                controller: portController,
+                decoration: const InputDecoration(
+                  border: OutlineInputBorder(),
+                  labelText: 'Port',
+                ),
+              ))
+              )
+            ],
+          ),
+          Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: <Widget>[
+              Padding(
+                padding: const EdgeInsets.all(10.0),
+                child: ElevatedButton(
+                  onPressed: _try_join,
+                  child: Text(
+                      'Join the game !',
+                    style: Theme.of(context).textTheme.headline5,
                   ),
-                ))
-                )
-              ],
-            ),
-            Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: <Widget>[
-                Padding(
-                  padding: const EdgeInsets.all(10.0),
-                  child: ElevatedButton(
-                    onPressed: _try_join,
-                    child: Text(
-                        'Join the game !',
-                      style: Theme.of(context).textTheme.headline5,
-                    ),
-                  ),
-                )
-              ],
-            ),
-          ]),
+                ),
+              )
+            ],
+          ),
+        ]),
       );
   }
 }
