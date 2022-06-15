@@ -152,13 +152,16 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin{
           Row(
             children: [
               Expanded(child:
-              TextField(
-                controller: playerController,
-                decoration: const InputDecoration(
-                  border: OutlineInputBorder(),
-                  labelText: 'Player number',
+              Padding(
+                padding: const EdgeInsets.all(8.0),
+                child: TextField(
+                  controller: playerController,
+                  decoration: const InputDecoration(
+                    border: OutlineInputBorder(),
+                    labelText: 'Player number',
+                  ),
+                  keyboardType: TextInputType.number,
                 ),
-                keyboardType: TextInputType.number,
               ))
             ],
           ),
